@@ -215,6 +215,19 @@ router.delete('/api/bookings/:id', async function (req, res) {
   return res.status(204).send();
 
 });
+// GroupBy
+router.get('/api/bookings/aggregate/groupby', async function (req, res) {
 
+  const pipeline = [
+    { $match: { superhero: { $ne: null }}},
+    { $match: { payment: "Paypal" } },
+    { $group: { _id: "$superhero", count: { $sum: 1 } } }
+  ];
+
+  const results = await db.collection("bookings").aggregate(pipeline).toArray();
+
+  return res.json(results);
+
+});
 module.exports = router;
 
