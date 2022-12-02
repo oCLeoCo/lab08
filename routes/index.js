@@ -1,19 +1,20 @@
 var express = require('express');
 var router = express.Router();
-
+//import { auth } from ".../middlewares/auth";
+const auth = require("../middlewares/auth.js");
 var MongoClient = require('mongodb').MongoClient;
 var ObjectId = require('mongodb').ObjectId;
 var url = 'mongodb://daydayday:oWietK22bBAOYcQgryRRBo8VBJRkGy3H6Jmw57kvzvc3MBlWqwx1QzapM8VXLkOfMIwno1ZzUvidf1gV9hcbpw==@daydayday.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&maxIdleTimeMS=120000&appName=@daydayday@';
-
+var jwt = require('jsonwebtoken');
 var db;
-
+const { v4: uuidv4 } = require('uuid');
 MongoClient.connect(url, function (err, client) {
   db = client.db('bookingsDB');
   console.log("DB connected");
 });
 
-
-/* Handle the Form */
+/*
+Handle the Form
 router.post('/bookings', async function (req, res) {
 
   // var response = {
@@ -29,6 +30,7 @@ router.post('/bookings', async function (req, res) {
   res.status(201).json({ id: result.insertedId });
 
 });
+*/
 
 /* GET home page. */
 router.get('/', function (req, res, next) {
@@ -215,8 +217,8 @@ router.delete('/api/bookings/:id', async function (req, res) {
   return res.status(204).send();
 
 });
-// GroupBy
-router.get('/api/bookings/aggregate/groupby', async function (req, res) {
+//============================================GroupBy
+router.get('/api/bookings/aggregate/groupby', auth, async function (req, res) {
 
   const pipeline = [
     { $match: { superhero: { $ne: null }}},
@@ -227,6 +229,69 @@ router.get('/api/bookings/aggregate/groupby', async function (req, res) {
   const results = await db.collection("bookings").aggregate(pipeline).toArray();
 
   return res.json(results);
+
+});
+/* Handle the Form */
+router.post('/bookings', async function (req, res) {
+
+  req.body.numTickets = parseInt(req.body.numTickets);
+
+  let result = await db.collection("bookings").insertOne(req.body);
+
+  for (var i = 0; i < req.body.numTickets; i++) {
+
+    await db.collection("tickets").insertOne({ bookingId: result.insertedId, uuid: uuidv4() });
+  }
+
+  res.status(201).json({ id: result.insertedId });
+
+});
+router.get("/api/bookings/:id/tickets", async function (req, res) {
+
+  if (!ObjectId.isValid(req.params.id))
+    return res.status(404).send('Unable to find the requested resource!');
+
+  var pipelines = [
+    { $match: { _id: req.params.id } },
+    {
+      $lookup:
+      {
+        from: "tickets",
+        localField: "_id",
+        foreignField: "bookingId",
+        as: "tickets"
+      }
+    }
+  ]
+
+  let results = await db.collection("bookings").aggregate(pipelines).toArray();
+
+  if (results.length > 0)
+    return res.json(results[0]);
+  else
+    return res.status(404).send("Not Found");
+
+});
+router.post("/api/login", async function (req, res) {
+
+  if (req.body.password == "123456") {
+
+    const user = {};
+
+    const token = jwt.sign(
+      { user_id: req.body.email }, "process.env.TOKEN_KEY", {
+      expiresIn: "2h",
+    }
+    );
+
+    user.token = token;
+
+    return res.json(user);
+
+  } else {
+    res.status(400).send("Invalid Credentials");
+
+  }
 
 });
 module.exports = router;
