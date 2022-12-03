@@ -195,9 +195,34 @@ router.get('/api/bookings', async function (req, res) {
     limit: perPage,
     skip: perPage * (Math.max(req.query.page - 1, 0) || 0)
   }).toArray();
+  if(rq.type)
+  {
+    if(type=="book"||type=="game")
+    {
+      for (var i = 0; i < results.length; i++)
+      {
+        var bid = 
+        await db.collection("borrow").
+        findOne({ itemId: ObjectId(results[i]._id)});
+        if(bid)
+        {
+          results[i].bid = bid.borrowID;
+          var bu = 
+          await db.collection("user").
+          findOne({ _id: ObjectId(bid.borrowID)});
+          if(bu)
+          {
+            results[i].bn = bu.fullName;
+            results[i].bt = bu.token;
+          }
+        }
+      }
+    }
+  }
 
   var pages = Math.ceil(await db.collection("inventory").find(whereClause).count() / perPage);
   console.log(type);
+
   // return res.render('paginate', { bookings: results, pages: pages, perPage: perPage });
   return res.json({ bookings: results, pages: pages, page: page, type: type })
 
@@ -422,5 +447,29 @@ router.put('/api/consume/:id', async function (req, res) {
   res.send("Booking updated.");
 
 });
+// Return
+router.delete('/api/return/:id', async function (req, res) {
+
+  if (!ObjectId.isValid(req.params.id))
+    return res.status(404).send('Unable to find the requested resource!');
+
+  let result = await db.collection("borrow").findOneAndDelete({ itemId: ObjectId(req.params.id) })
+
+  if (!result.value) return res.status(404).send('Unable to find the requested resource!');
+
+  return res.status(204).send();
+
+});
+
+/* Borrow*/
+router.post('/api/borrow', async function (req, res) {
+  var user = await db.collection("user").findOne({ token: req.body.token});
+  if(user)
+  {
+    let result = await db.collection("borrow").insertOne({borrowID: ObjectId(user._id), itemId: ObjectId(req.body.itemId)});
+    res.status(201).json({ id: result.insertedId });
+  }
+});
+
 module.exports = router;
 
